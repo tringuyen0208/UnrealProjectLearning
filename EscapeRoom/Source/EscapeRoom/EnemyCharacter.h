@@ -15,6 +15,8 @@ public:
 	// Sets default values for this character's properties
 	AEnemyCharacter();
 
+	virtual void Tick(float DeltaTime) override;
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -32,4 +34,12 @@ public:
 	//Can the enemy see the given character
 	bool CanSeeActor(const AActor* const TargetActor) const;
 
+	void ThrowDodgeball();
+	FTimerHandle ThrowTimerHandle;
+	float ThrowingInterval = 2.f;
+	float ThrowingDelay = 0.5f;
+
+	//The class used to spawn a dodgeball object
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Dodgeball)
+		TSubclassOf<AActor> DodgeballClass;
 };

@@ -2,8 +2,13 @@
 
 
 #include "EnemyCharacter.h"
-#include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/GameplayStatics.h"
+#include "TimerManager.h"
+#include "DodgeballProjectile.h"
+#include "GameFramework/ProjectileMovementComponent.h"
+#include "DrawDebugHelpers.h"
 
 // Sets default values
 AEnemyCharacter::AEnemyCharacter()
@@ -47,6 +52,17 @@ void AEnemyCharacter::LookAtActor(AActor* TargetActor)
 
 		//Set enemy rotation to that rotation
 		SetActorRotation(LookAtRotation);
+
+		GetWorldTimerManager().SetTimer(ThrowTimerHandle,
+			this,
+			&AEnemyCharacter::ThrowDodgeball,
+			ThrowingInterval,
+			true,
+			ThrowingDelay);
+	}
+	else
+	{
+		GetWorldTimerManager().ClearTimer(ThrowTimerHandle);
 	}
 }
 
@@ -83,6 +99,20 @@ bool AEnemyCharacter::CanSeeActor(const AActor* const TargetActor) const
 	return !Hit.bBlockingHit;
 
 
+}
+
+void AEnemyCharacter::ThrowDodgeball()
+{
+	if (DodgeballClass == nullptr)
+	{
+		return;
+	}
+
+	FVector ForwardVector = GetActorForwardVector();
+	float SpawnDistance = 40.f;
+	FVector SpawnLocation = GetActorLocation() + (ForwardVector * SpawnDistance);
+	
+	GetWorld()->SpawnActor<AActor>(DodgeballClass, SpawnLocation, GetActorRotation());
 }
 
 // Called to bind functionality to input 
