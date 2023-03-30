@@ -6,16 +6,18 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
-#include "DodgeballProjectile.h"
+#include "DodgeballProjectile2.h"
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "DrawDebugHelpers.h"
 
 // Sets default values
 AEnemyCharacter::AEnemyCharacter()
 {
- 	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
+	SightSource = CreateDefaultSubobject<USceneComponent>(TEXT("Sight Source"));
+	SightSource->SetupAttachment(RootComponent);
 }
 
 // Called when the game starts or when spawned
@@ -30,75 +32,81 @@ void AEnemyCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	//Fetch the character currently being controlled by the player
-	ACharacter* PlayerCharacter = UGameplayStatics::GetPlayerCharacter(this, 0);
+	// Fetch the character currently being controlled by the player
+	ACharacter* PlayerCharacter = UGameplayStatics::GetPlayerCharacter(GetWorld(), 0);
 
-	//look at the player character
-	LookAtActor(PlayerCharacter);
+	// Look at the player character every frame
+	bCanSeePlayer = LookAtActor(PlayerCharacter);
+
+	if (bCanSeePlayer != bPreviousCanSeePlayer)
+	{
+		if (bCanSeePlayer)
+		{
+			//Start throwing dodgeballs
+			GetWorldTimerManager().SetTimer(ThrowTimerHandle,
+				this,
+				&AEnemyCharacter::ThrowDodgeball,
+				ThrowingInterval,
+				true,
+				ThrowingDelay);
+		}
+		else
+		{
+			//Stop throwing dodgeballs
+			GetWorldTimerManager().ClearTimer(ThrowTimerHandle);
+		}
+	}
+
+	bPreviousCanSeePlayer = bCanSeePlayer;
 }
 
-void AEnemyCharacter::LookAtActor(AActor* TargetActor)
+
+bool AEnemyCharacter::LookAtActor(AActor* TargetActor)
 {
-	if (TargetActor == nullptr) return;
+	if (TargetActor == nullptr) return false;
 
 	if (CanSeeActor(TargetActor))
 	{
-		//setting the location of enemy and the target
 		FVector Start = GetActorLocation();
 		FVector End = TargetActor->GetActorLocation();
-
-		//Calculate rotation for start point to face end point
+		// Calculate the necessary rotation for the Start point to face the End point
 		FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(Start, End);
 
-		//Set enemy rotation to that rotation
+		//Set the enemy's rotation to that rotation
 		SetActorRotation(LookAtRotation);
+		return true;
+	}
 
-		GetWorldTimerManager().SetTimer(ThrowTimerHandle,
-			this,
-			&AEnemyCharacter::ThrowDodgeball,
-			ThrowingInterval,
-			true,
-			ThrowingDelay);
-	}
-	else
-	{
-		GetWorldTimerManager().ClearTimer(ThrowTimerHandle);
-	}
+	return false;
 }
 
-bool AEnemyCharacter::CanSeeActor(const AActor* const TargetActor) const
+bool AEnemyCharacter::CanSeeActor(AActor* TargetActor)
 {
-	if(TargetActor == nullptr)
-	return false;
+	if (TargetActor == nullptr) return false;
 
-	//store the results of the Line Trace
+	// Store the results of the Line Trace
 	FHitResult Hit;
-	
-	//where the line trace starts and ends
-	FVector Start = GetActorLocation();
+
+	// Where the Line Trace starts and ends
+	FVector Start = SightSource->GetComponentLocation();
 	FVector End = TargetActor->GetActorLocation();
 
-	//The trace channel we want to compare against
-	ECollisionChannel Channel = ECollisionChannel::ECC_Visibility;
+	// The trace channel we want to compare against
+	ECollisionChannel Channel = ECollisionChannel::ECC_GameTraceChannel1;
 
 	FCollisionQueryParams QueryParams;
-	//ignore the actor executing files
+	// Ignore the actor that's executing this Line Trace
 	QueryParams.AddIgnoredActor(this);
-	//Ignore the target
+	// And the target we're checking for
 	QueryParams.AddIgnoredActor(TargetActor);
 
-	//Line trace
-	GetWorld()->LineTraceSingleByChannel(Hit, Start, End,Channel,QueryParams);
+	// Execute the Line Trace
+	GetWorld()->LineTraceSingleByChannel(Hit, Start, End, Channel, QueryParams);
 
-	//set color green if blocked or red if not blocked
-	FColor LineColor = (Hit.bBlockingHit) ? FColor::Green : FColor::Red;
-
-	//Show the line trace inside the game
-	DrawDebugLine(GetWorld(), Start, End, LineColor);
+	// Show the Line Trace inside the game
+	DrawDebugLine(GetWorld(), Start, End, FColor::Red);
 
 	return !Hit.bBlockingHit;
-
-
 }
 
 void AEnemyCharacter::ThrowDodgeball()
@@ -111,9 +119,6 @@ void AEnemyCharacter::ThrowDodgeball()
 	FVector ForwardVector = GetActorForwardVector();
 	float SpawnDistance = 40.f;
 	FVector SpawnLocation = GetActorLocation() + (ForwardVector * SpawnDistance);
-	
-	GetWorld()->SpawnActor<AActor>(DodgeballClass, SpawnLocation, GetActorRotation());
+
+	GetWorld()->SpawnActor<ADodgeballProjectile2>(DodgeballClass, SpawnLocation, GetActorRotation());
 }
-
-// Called to bind functionality to input 
-
